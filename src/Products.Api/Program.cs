@@ -1,16 +1,12 @@
+using System.Net.Mime;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
-using OpenTelemetry.Resources;
-using OpenTelemetry.Trace;
+using Products.Api.Consumers;
 using Products.Api.Database;
 using Products.Api.Extensions;
-using Serilog;
 using Products.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
-
-builder.Host.UseSerilog((context, configuration) => configuration.ReadFrom.Configuration(context.Configuration));
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -20,25 +16,23 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddMassTransit(x =>
 {
+    x.AddConsumer<ProductUpdatesConsumer>();
+    
     x.UsingRabbitMq((context, cfg) =>
     {
         cfg.Host(builder.Configuration.GetConnectionString("RabbitMQ"));
+        
+        cfg.ReceiveEndpoint("product-updates", endpointConfigurator =>
+        {
+            endpointConfigurator.ConfigureConsumeTopology = false;
+
+            endpointConfigurator.DefaultContentType = new ContentType("application/json");
+            endpointConfigurator.UseRawJsonSerializer();
+
+            endpointConfigurator.Consumer<ProductUpdatesConsumer>(context);
+        });
     });
 });
-
-builder.Services
-    .AddOpenTelemetry()
-    .ConfigureResource(resource => resource.AddService("Products.Api"))
-    .WithTracing(tracing =>
-    {
-        tracing
-            .AddHttpClientInstrumentation()
-            .AddAspNetCoreInstrumentation()
-            .AddNpgsql()
-            .AddSource(MassTransit.Logging.DiagnosticHeaders.DefaultListenerName);
-
-        tracing.AddOtlpExporter();
-    });
 
 builder.Services.AddHostedService<ProductGeneratorService>();
 

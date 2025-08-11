@@ -10,7 +10,7 @@ WORKDIR /src
 COPY ["src/Products.Api/Products.Api.csproj", "src/Products.Api/"]
 RUN dotnet restore "src/Products.Api/Products.Api.csproj"
 COPY . .
-WORKDIR "/src/src/Products.Api"
+WORKDIR "/src/Products.Api"
 RUN dotnet build "./Products.Api.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
 FROM build AS publish

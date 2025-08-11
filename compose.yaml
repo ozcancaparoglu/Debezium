@@ -8,8 +8,8 @@
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://seq:5341/ingest/otlp/v1/traces
       - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
     ports:
-      - 5000:8080
-      - 5001:8081
+      - 5006:8080
+      - 5007:8081
 
   postgres:
     image: postgres:latest
@@ -22,7 +22,8 @@
       - ./.containers/postgres:/var/lib/postgresql/data
     ports:
       - 5432:5432
-
+    command: ["postgres", "-c", "wal_level=logical"]
+  
   rabbitmq:
     image: rabbitmq:management
     container_name: RabbitMq
@@ -36,14 +37,51 @@
     ports:
       - 15672:15672
       - 5672:5672
-
-  seq:
-    image: datalust/seq:latest
-    container_name: Seq
-    volumes:
-      - ./.containers/seq:/data
+  
+  debezium:
+    image: debezium/server:2.7.3.Final
+    container_name: Debezium.Cdc
+    depends_on:
+      - postgres
+      - rabbitmq
     environment:
-      - ACCEPT_EULA=Y
-    ports:
-      - 5341:5341
-      - 8081:80
+      # Debezium configuration
+      - DEBEZIUM_SERVER_NAME=debezium-server
+      - DEBEZIUM_SOURCE_OFFSET_STORAGE_FILE_FILENAME=/debezium/data/offsets.dat
+      - DEBEZIUM_SOURCE_OFFSET_FLUSH_INTERVAL_MS=60000
+      - DEBEZIUM_SOURCE_TOMBSTONES_ON_DELETE=false
+      - QUARKUS_LOG_CONSOLE_JSON=false
+
+      # PostgreSQL source configuration
+      - DEBEZIUM_SOURCE_CONNECTOR_CLASS=io.debezium.connector.postgresql.PostgresConnector
+      - DEBEZIUM_SOURCE_PLUGIN_NAME=pgoutput
+      - DEBEZIUM_SOURCE_DATABASE_HOSTNAME=postgres
+      - DEBEZIUM_SOURCE_DATABASE_PORT=5432
+      - DEBEZIUM_SOURCE_DATABASE_USER=postgres
+      - DEBEZIUM_SOURCE_DATABASE_PASSWORD=postgres
+      - DEBEZIUM_SOURCE_DATABASE_DBNAME=commerce
+      - DEBEZIUM_SOURCE_SCHEMA_INCLUDE_LIST=public
+      - DEBEZIUM_SOURCE_TABLE_INCLUDE_LIST=public.Products
+      - DEBEZIUM_SOURCE_TOPIC_PREFIX=commerce
+
+      # RabbitMQ sink configuration
+      - DEBEZIUM_SINK_TYPE=rabbitmq
+      - DEBEZIUM_SINK_RABBITMQ_CONNECTION_HOST=rabbitmq
+      - DEBEZIUM_SINK_RABBITMQ_CONNECTION_PORT=5672
+      - DEBEZIUM_SINK_RABBITMQ_CONNECTION_USERNAME=guest
+      - DEBEZIUM_SINK_RABBITMQ_CONNECTION_PASSWORD=guest
+      - DEBEZIUM_SINK_RABBITMQ_EXCHANGE_NAME=product-updates
+
+      # Transformations
+      - DEBEZIUM_TRANSFORMS=unwrap,reroute
+      - DEBEZIUM_TRANSFORMS_UNWRAP_TYPE=io.debezium.transforms.ExtractNewRecordState
+      - DEBEZIUM_FORMAT_VALUE=json
+      - DEBEZIUM_FORMAT_VALUE_SCHEMAS_ENABLE=false
+      - DEBEZIUM_SOURCE_DECIMAL_HANDLING_MODE=string
+      - DEBEZIUM_TRANSFORMS_REROUTE_TYPE=io.debezium.transforms.ByLogicalTableRouter
+      - DEBEZIUM_TRANSFORMS_REROUTE_TOPIC_REGEX=(.*)\.public\.Products
+      - DEBEZIUM_TRANSFORMS_REROUTE_TOPIC_REPLACEMENT=product-updates
+      - DEBEZIUM_TRANSFORMS_REROUTE_KEY_FIELD_REGEX=(.*)\.public\.Products
+      - DEBEZIUM_TRANSFORMS_REROUTE_KEY_FIELD_REPLACEMENT=product-updates
+    volumes:
+      - ./.containers/debezium/data:/debezium-data

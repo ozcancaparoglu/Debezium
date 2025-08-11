@@ -9,8 +9,8 @@ public class ProductUpdatesConsumer(ILogger<ProductUpdatesConsumer> logger) : IC
         var jsonMessage = context.Message;
         //logger.LogInformation("Received product change: {@JsonMessage}", jsonMessage);
         
-        logger.LogInformation($"---- Id: {jsonMessage.Id.ToString()}, Name: {jsonMessage.Name}, Description: {jsonMessage.Description}, Price: {jsonMessage.Price} ----" );
-        
+        logger.LogInformation("Received product change: Id={Id}, Name={Name}, Description={Description}, Price={Price}",
+            jsonMessage.Id, jsonMessage.Name, jsonMessage.Description, jsonMessage.Price);
 
         // You can add more processing logic here if needed
 

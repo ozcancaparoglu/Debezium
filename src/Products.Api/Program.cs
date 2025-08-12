@@ -34,7 +34,9 @@ builder.Services.AddMassTransit(x =>
     });
 });
 
-builder.Services.AddHostedService<ProductGeneratorService>();
+//builder.Services.AddHostedService<ProductGeneratorService>();
+builder.Services.AddHostedService<ProductUpdaterService>();
+//builder.Services.AddHostedService<ProductDeleterService>();
 
 var app = builder.Build();
 
